@@ -67,9 +67,10 @@ struct ContentView: View {
                         Text("\(container.conversations.count)")
                             .foregroundStyle(.secondary)
                         Spacer()
-                        Text(container.id)
+                        Text(container.pathLabel)
                             .font(.caption)
                             .foregroundStyle(.tertiary)
+                            .help(container.id)
                     }
                 }
             }
@@ -81,7 +82,7 @@ struct ContentView: View {
             Picker("Destination:", selection: $store.destinationID) {
                 Text("Choose a project…").tag(String?.none)
                 ForEach(store.containers) { container in
-                    Text(container.displayName).tag(String?.some(container.id))
+                    Text(destinationLabel(for: container)).tag(String?.some(container.id))
                 }
             }
             .frame(maxWidth: 340)
@@ -125,6 +126,15 @@ struct ContentView: View {
 
     private var canTransfer: Bool {
         store.destinationID != nil && !store.selection.isEmpty
+    }
+
+    /// Appends the project location whenever another container shares the same display
+    /// name, so identically named projects are distinguishable in the picker.
+    private func destinationLabel(for container: Container) -> String {
+        let isAmbiguous = store.containers.contains {
+            $0.id != container.id && $0.displayName == container.displayName
+        }
+        return isAmbiguous ? "\(container.displayName) — \(container.pathLabel)" : container.displayName
     }
 
     private func startTransfer(move: Bool) {

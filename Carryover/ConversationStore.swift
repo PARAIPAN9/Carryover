@@ -66,6 +66,7 @@ final class ConversationStore {
                 id: dir.lastPathComponent,
                 displayName: Self.displayName(forContainerDirName: dir.lastPathComponent),
                 url: dir,
+                projectPath: projectPath(for: conversations),
                 conversations: conversations))
         }
         containers = result
@@ -143,6 +144,18 @@ final class ConversationStore {
         if !dryRun {
             scan()
         }
+    }
+
+    /// The container-name hash isn't reversible, but any agent-backed conversation
+    /// reveals the project's real folder via its session transcript's cwd.
+    private func projectPath(for conversations: [Conversation]) -> String? {
+        for conversation in conversations {
+            guard let sessionID = conversation.sessionID,
+                  let location = agentStore.locateSession(sessionID),
+                  let cwd = agentStore.cwd(ofSessionFile: location.jsonl) else { continue }
+            return cwd
+        }
+        return nil
     }
 
     /// The container-name hash isn't reversible, but any existing conversation in the

@@ -6,7 +6,16 @@ struct Container: Identifiable {
     let id: String          // directory name on disk, e.g. "Client-eqzwjakjzwvucubwlrgllpdjlmid"
     let displayName: String
     let url: URL
+    let projectPath: String?  // real workspace folder, recovered from an agent session's cwd
     var conversations: [Conversation]
+
+    /// Human-readable location used to tell same-named projects apart: the project folder
+    /// with the home directory abbreviated, falling back to the hashed directory name.
+    var pathLabel: String {
+        guard let projectPath else { return id }
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        return projectPath.hasPrefix(home) ? "~" + projectPath.dropFirst(home.count) : projectPath
+    }
 
     var manifestURL: URL { url.appending(path: "CodingAssistantManifest.plist") }
     var snapshotsURL: URL { url.appending(path: "Snapshots") }

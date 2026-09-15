@@ -29,7 +29,9 @@ final class TransferEngine {
         log("— \(dryRun ? "DRY RUN: " : "")\(verb) \(conversations.count) conversation(s) → \(destination.displayName) —")
 
         if !dryRun {
-            try backUpManifests(for: conversations, destination: destination, containersByID: containersByID)
+            try backUp(conversations: conversations, destination: destination,
+                       containersByID: containersByID, agentDestination: agentDestination,
+                       includeSourceFiles: move)
         }
 
         var transferred: [Conversation] = []
@@ -228,20 +230,61 @@ final class TransferEngine {
 
     // MARK: - Helpers
 
-    private func backUpManifests(for conversations: [Conversation],
-                                 destination: Container,
-                                 containersByID: [String: Container]) throws {
+    /// Backs up everything a transfer can change before touching it: the manifests of every
+    /// involved container always, plus — for a move — the conversation directories, referenced
+    /// snapshots, and agent session files that will be deleted from the source. Backups live
+    /// under Application Support so they survive OS temp-directory cleanup.
+    private func backUp(conversations: [Conversation],
+                        destination: Container,
+                        containersByID: [String: Container],
+                        agentDestination: AgentDestination?,
+                        includeSourceFiles: Bool) throws {
         let stamp = ISO8601DateFormatter().string(from: .now).replacingOccurrences(of: ":", with: "-")
-        let backupDir = fm.temporaryDirectory.appending(path: "ConversationMoverBackups/\(stamp)")
-        try fm.createDirectory(at: backupDir, withIntermediateDirectories: true)
+        let backupDir = try fm.url(for: .applicationSupportDirectory, in: .userDomainMask,
+                                   appropriateFor: nil, create: true)
+            .appending(path: "Carryover/Backups/\(stamp)")
+
+        let manifestsDir = backupDir.appending(path: "manifests")
+        try fm.createDirectory(at: manifestsDir, withIntermediateDirectories: true)
         var containerIDs = Set(conversations.map(\.containerID))
         containerIDs.insert(destination.id)
         for id in containerIDs {
             guard let container = containersByID[id], fm.fileExists(atPath: container.manifestURL.path) else { continue }
             try fm.copyItem(at: container.manifestURL,
-                            to: backupDir.appending(path: "\(id)-CodingAssistantManifest.plist"))
+                            to: manifestsDir.appending(path: "\(id)-CodingAssistantManifest.plist"))
         }
-        log("Manifests backed up to \(backupDir.path)")
+
+        if includeSourceFiles {
+            for conversation in conversations {
+                guard let source = containersByID[conversation.containerID] else { continue }
+                let containerBackup = backupDir.appending(path: source.id)
+                let conversationDir = source.url.appending(path: conversation.id)
+                if fm.fileExists(atPath: conversationDir.path) {
+                    try fm.createDirectory(at: containerBackup, withIntermediateDirectories: true)
+                    try fm.copyItem(at: conversationDir, to: containerBackup.appending(path: conversation.id))
+                }
+
+                let snapshotsBackup = containerBackup.appending(path: "Snapshots")
+                for id in referencedSnapshotIDs(inConversationDir: conversationDir).sorted() {
+                    let snapshot = source.snapshotsURL.appending(path: "\(id).plist")
+                    let target = snapshotsBackup.appending(path: "\(id).plist")
+                    guard fm.fileExists(atPath: snapshot.path), !fm.fileExists(atPath: target.path) else { continue }
+                    try fm.createDirectory(at: snapshotsBackup, withIntermediateDirectories: true)
+                    try fm.copyItem(at: snapshot, to: target)
+                }
+
+                if let sessionID = conversation.sessionID,
+                   let location = agentStore.locateSession(sessionID, excluding: agentDestination?.slugDir) {
+                    let agentBackup = backupDir.appending(path: "agent/\(location.slugDir.lastPathComponent)")
+                    try fm.createDirectory(at: agentBackup, withIntermediateDirectories: true)
+                    try fm.copyItem(at: location.jsonl, to: agentBackup.appending(path: "\(sessionID).jsonl"))
+                    if let sidecar = location.sidecar {
+                        try fm.copyItem(at: sidecar, to: agentBackup.appending(path: sessionID))
+                    }
+                }
+            }
+        }
+        log("\(includeSourceFiles ? "Full backup" : "Manifests backed up") at \(backupDir.path)")
     }
 
     private func referencedSnapshotIDs(inConversationDir dir: URL) -> Set<String> {
