@@ -1,6 +1,6 @@
 # Carryover
 ![Carryover](screenshot.png)
-A small macOS utility that copies or moves **Xcode Coding Assistant conversations** between projects — including their Claude agent sessions — so your conversation history follows your code.
+A small macOS utility that copies or moves **Xcode Coding Assistant conversations** between projects — any model provider, with Claude agent sessions carried along — so your conversation history follows your code.
 
 ## The problem
 
