@@ -58,7 +58,9 @@ If the destination project has no agent-backed conversations yet, Carryover can'
 ## Requirements
 
 - macOS 14 or later
-- Xcode with the Coding Assistant (Claude in Xcode)
+- Xcode with the Coding Assistant
+
+Conversations from **any model provider** are supported — they all live in the same Xcode store, and Carryover copies manifest entries verbatim, so provider-specific data survives untouched. The agent-session carryover (transcript + `cwd` rewrite) applies to Claude-backed agentic conversations, which are the only ones that keep state outside the Xcode store; other conversations transfer completely without it.
 
 ## Building
 
