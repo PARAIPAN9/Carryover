@@ -72,12 +72,20 @@ final class TransferEngine {
         guard fm.fileExists(atPath: sourceDir.path) else {
             throw TransferError("conversation directory missing at \(sourceDir.path)")
         }
-        // v1 collision policy: same UUID already present in the destination → refuse.
-        if fm.fileExists(atPath: destinationDir.path) {
+        // Collision policy: refuse only when the destination manifest (the source of
+        // truth) lists the conversation. A directory without a manifest entry is a stale
+        // leftover from a conversation deleted in Xcode and can safely be replaced.
+        if destination.conversations.contains(where: { $0.id == conversation.id }) {
             throw TransferError("a conversation with id \(conversation.id) already exists in \(destination.displayName)")
         }
 
         log("\(conversation.name): \(conversation.id)/ → \(destination.id)/")
+        if fm.fileExists(atPath: destinationDir.path) {
+            log("  replacing stale directory left by a deleted conversation")
+            if !dryRun {
+                try fm.removeItem(at: destinationDir)
+            }
+        }
         if !dryRun {
             try fm.copyItem(at: sourceDir, to: destinationDir)
         }
